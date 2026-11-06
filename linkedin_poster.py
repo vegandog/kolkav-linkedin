@@ -156,17 +156,28 @@ def log_result(status: str, text: str, error: str = ""):
 
 
 def setup_mode():
-    """ריצה ראשונה: פותח דפדפן גלוי להתחברות ידנית ושמירת session"""
+    """פותח דפדפן גלוי להתחברות ידנית ושמירת session - ממתין אוטומטית עד להתחברות"""
     print("=== SETUP MODE ===")
-    print("יפתח דפדפן. התחבר ל-LinkedIn ואז לחץ Enter.")
+    print("יפתח דפדפן. התחבר ל-LinkedIn - הסקריפט ישמור session אוטומטית.")
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
         context = browser.new_context(viewport={"width": 1280, "height": 800})
         page = context.new_page()
         page.goto("https://www.linkedin.com/login")
-        print("התחבר ואז חכה...")
-        input("לאחר ההתחברות, לחץ Enter: ")
+        print("ממתין להתחברות (5 דקות מקסימום)...")
+        import time
+        deadline = time.time() + 300
+        logged_in = False
+        while time.time() < deadline:
+            time.sleep(3)
+            url = page.url
+            if "login" not in url and "authwall" not in url and "linkedin.com" in url:
+                page.wait_for_timeout(2000)
+                logged_in = True
+                break
+        if not logged_in:
+            print("timeout - שומר session כמו שהוא")
         context.storage_state(path=str(STATE_FILE))
         browser.close()
 
