@@ -83,25 +83,36 @@ def post_to_linkedin(text: str, headless: bool = True) -> dict:
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=headless,
-            args=["--no-sandbox"],
+            args=[
+                "--no-sandbox",
+                "--disable-blink-features=AutomationControlled",
+                "--disable-features=IsolateOrigins,site-per-process",
+            ],
         )
 
         # טעינת session קיים
-        ctx_args = {"viewport": {"width": 1280, "height": 800}}
+        ctx_args = {
+            "viewport": {"width": 1280, "height": 800},
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+            "extra_http_headers": {"accept-language": "en-US,en;q=0.9"},
+        }
         if STATE_FILE.exists():
             ctx_args["storage_state"] = str(STATE_FILE)
 
         context = browser.new_context(**ctx_args)
+        context.add_init_script("Object.defineProperty(navigator,'webdriver',{get:()=>undefined})")
         page = context.new_page()
 
         # פתיחת דיאלוג פרסום
         page.goto(POST_URL, wait_until="domcontentloaded")
         page.wait_for_timeout(6000)
 
-        # בדיקת login
-        if "login" in page.url or "authwall" in page.url:
+        print(f"URL: {page.url[:100]}")
+
+        # בדיקת login/checkpoint
+        if any(x in page.url for x in ["login", "authwall", "checkpoint", "challenge"]):
             browser.close()
-            return {"status": "NEED_LOGIN", "error": "Not logged in. Run with --setup first."}
+            return {"status": "NEED_LOGIN", "error": f"Blocked: {page.url[:80]}"}
 
         # המתנה לעורך - אם הדיאלוג לא נפתח אוטומטית, לחץ על Start a post
         try:
@@ -115,6 +126,7 @@ def post_to_linkedin(text: str, headless: bool = True) -> dict:
                     page.wait_for_timeout(3000)
                 page.wait_for_selector('[contenteditable="true"]', timeout=8000)
             except Exception as e2:
+                print(f"Final URL: {page.url[:100]}")
                 browser.close()
                 return {"status": "FAILED", "error": f"Post editor not found: {e2}"}
 
