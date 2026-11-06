@@ -96,19 +96,27 @@ def post_to_linkedin(text: str, headless: bool = True) -> dict:
 
         # פתיחת דיאלוג פרסום
         page.goto(POST_URL, wait_until="domcontentloaded")
-        page.wait_for_timeout(3000)
+        page.wait_for_timeout(6000)
 
         # בדיקת login
         if "login" in page.url or "authwall" in page.url:
             browser.close()
             return {"status": "NEED_LOGIN", "error": "Not logged in. Run with --setup first."}
 
-        # המתנה לעורך
+        # המתנה לעורך - אם הדיאלוג לא נפתח אוטומטית, לחץ על Start a post
         try:
-            page.wait_for_selector('[contenteditable="true"]', timeout=8000)
+            page.wait_for_selector('[contenteditable="true"]', timeout=5000)
         except Exception:
-            browser.close()
-            return {"status": "FAILED", "error": "Post editor not found"}
+            # נסה ללחוץ על כפתור Start a post / Create post
+            try:
+                btn = page.locator('button:has-text("Start a post"), button:has-text("Create a post")')
+                if btn.count() > 0:
+                    btn.first.click()
+                    page.wait_for_timeout(3000)
+                page.wait_for_selector('[contenteditable="true"]', timeout=8000)
+            except Exception as e2:
+                browser.close()
+                return {"status": "FAILED", "error": f"Post editor not found: {e2}"}
 
         editor = page.locator('[contenteditable="true"]').first
         editor.click()
